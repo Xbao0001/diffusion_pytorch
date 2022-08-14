@@ -6,22 +6,24 @@ import torch.nn.functional as F
 
 def get_timestep_embedding(timesteps, embedding_dim):
     """
-    This matches the implementation in Denoising Diffusion Probabilistic Models:
-    From Fairseq.
-    Build sinusoidal embeddings.
     This matches the implementation in tensor2tensor, but differs slightly
     from the description in Section 3.5 of "Attention Is All You Need".
+
+    :param timesteps: a 1-D Tensor of N indices, one per batch element.
+                      These may be fractional.
+    :param embedding_dim: the dimension of the output. 
+    :return: an [N x dim] Tensor of positional embeddings.
     """
     assert len(timesteps.shape) == 1
 
     half_dim = embedding_dim // 2
     emb = math.log(10000) / (half_dim - 1)
     emb = torch.exp(torch.arange(half_dim, dtype=torch.float32) * -emb)
-    emb = emb.to(device=timesteps.device)
-    emb = timesteps.float()[:, None] * emb[None, :]
-    emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1)
+    emb = emb.to(device=timesteps.device) # (dim // 2,)
+    emb = timesteps.float()[:, None] * emb[None, :] # (N, dim // 2)
+    emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1) # (N, dim // 2 * 2)
     if embedding_dim % 2 == 1:  # zero pad
-        emb = F.pad(emb, (0, 1, 0, 0))
+        emb = F.pad(emb, (0, 1, 0, 0)) # (N, dim)
     return emb
 
 
@@ -109,11 +111,13 @@ class ResnetBlock(nn.Module):
                 )
 
     def forward(self, x, temb):
+        # x: (b, ci, h, w), temb: (b, temb_channels)
         h = x
         h = self.norm1(h)
         h = nonlinearity(h)
-        h = self.conv1(h)
+        h = self.conv1(h) # (b, co, h, w)
 
+        # (b, co, h, w) + (b, co, 1, 1)
         h = h + self.temb_proj(nonlinearity(temb))[:, :, None, None]
 
         h = self.norm2(h)
@@ -292,16 +296,17 @@ class Model(nn.Module):
         )
 
     def forward(self, x, t):
+        # x: (b, c, h, w), t: (b,)
         assert x.shape[2] == x.shape[3] == self.resolution
 
         # timestep embedding
-        temb = get_timestep_embedding(t, self.ch)
+        temb = get_timestep_embedding(t, self.ch) # (b, ch)
         temb = self.temb.dense[0](temb)
         temb = nonlinearity(temb)
-        temb = self.temb.dense[1](temb)
+        temb = self.temb.dense[1](temb) # (b, 4 * ch)
 
         # downsampling
-        hs = [self.conv_in(x)]
+        hs = [self.conv_in(x)] # (b, ch, 32, 32)
         for i_level in range(self.num_resolutions):
             for i_block in range(self.num_res_blocks):
                 h = self.down[i_level].block[i_block](hs[-1], temb)
