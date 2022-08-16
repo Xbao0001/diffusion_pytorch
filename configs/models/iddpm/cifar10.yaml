@@ -1,0 +1,14 @@
+in_channels: 3
+model_channels: 128
+out_channels: 6 # learned sigma
+num_res_blocks: 3
+attention_resolutions: [2, 4] # 32 // 16, 32 // 8
+dropout: 0.3
+channel_mult: [1, 2, 2, 2]
+conv_resample: true
+dims: 2
+num_classes: null
+use_checkpoint: false 
+num_heads: 4
+num_heads_upsample: 4
+use_scale_shift_norm: true
