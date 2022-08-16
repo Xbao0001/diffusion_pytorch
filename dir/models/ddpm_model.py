@@ -300,10 +300,13 @@ class Model(nn.Module):
         # NOTE: below line constricts the model from using different resolution
         assert x.shape[2] == x.shape[3] == self.resolution
 
+        # in compatiable with diffuser ddpm_pipeline
         if not torch.is_tensor(t):
             t = torch.tensor([t], dtype=torch.long, device=x.device)
         elif torch.is_tensor(t) and len(t.shape) == 0:
             t = t[None].to(x.device)
+        if t.shape[0] == 1:
+            timesteps = timesteps.repeat(x.shape[0])
         
         # timestep embedding
         temb = get_timestep_embedding(t, self.ch) # (b, ch)
