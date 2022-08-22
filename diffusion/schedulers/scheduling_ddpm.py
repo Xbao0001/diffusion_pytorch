@@ -20,8 +20,7 @@ from typing import Union
 import numpy as np
 import torch
 
-from diffusers.configuration_utils import ConfigMixin, register_to_config
-from diffusers.schedulers.scheduling_utils import SchedulerMixin
+from .scheduling_utils import SchedulerMixin
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
@@ -47,8 +46,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     return np.array(betas, dtype=np.float32)
 
 
-class DDPMScheduler(SchedulerMixin, ConfigMixin):
-    @register_to_config
+class DDPMScheduler(SchedulerMixin):
     def __init__(
         self,
         num_train_timesteps=1000,
@@ -60,6 +58,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         clip_sample=True,
         tensor_format="pt",
     ):
+        self.num_train_timesteps = num_train_timesteps
+        self.variance_type = variance_type
+        self.clip_sample = clip_sample
 
         if trained_betas is not None:
             self.betas = np.asarray(trained_betas)
@@ -83,14 +84,14 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         self.set_format(tensor_format=tensor_format)
 
     def set_timesteps(self, num_inference_steps):
-        num_inference_steps = min(self.config.num_train_timesteps, num_inference_steps)
+        num_inference_steps = min(self.num_train_timesteps, num_inference_steps)
         self.num_inference_steps = num_inference_steps
         self.timesteps = np.arange(
-            0, self.config.num_train_timesteps, self.config.num_train_timesteps // self.num_inference_steps
+            0, self.num_train_timesteps, self.num_train_timesteps // self.num_inference_steps
         )[::-1].copy()
         self.set_format(tensor_format=self.tensor_format)
 
-    def _get_variance(self, t, variance_type=None):
+    def _get_variance(self, t, variance_value=None):
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[t - 1] if t > 0 else self.one
 
@@ -99,22 +100,21 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # x_{t-1} ~ N(pred_prev_sample, variance) == add variance to pred_sample
         variance = (1 - alpha_prod_t_prev) / (1 - alpha_prod_t) * self.betas[t]
 
-        if variance_type is None:
-            variance_type = self.config.variance_type
-
         # hacks - were probs added for training stability
-        if variance_type == "fixed_small":
-            variance = self.clip(variance, min_value=1e-20)
-        # for rl-diffuser https://arxiv.org/abs/2205.09991
-        elif variance_type == "fixed_small_log":
-            variance = self.log(self.clip(variance, min_value=1e-20))
-        elif variance_type == "fixed_large":
-            variance = self.betas[t]
-        elif variance_type == "fixed_large_log":
+        if self.variance_type == "fixed_small":
+            log_variance = self.log(self.clip(variance, min_value=1e-20))
+        elif self.variance_type == "fixed_large":
             # Glide max_log
-            variance = self.log(self.betas[t])
+            log_variance = self.log(self.betas[t])
+        elif self.variance_type == 'learned_range':
+            min_log = self.log(self.clip(variance, min_value=1e-20))
+            max_log = self.log(self.betas[t])
+            v = (variance_value + 1) / 2
+            log_variance = v * max_log + (1 - v) * min_log
+        else:
+            raise ValueError(f"'{self.variance_type}' is not supported.")
 
-        return variance
+        return log_variance
 
     def step(
         self,
@@ -131,15 +131,24 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
-        # 2. compute predicted original sample from predicted noise also called
+        # 2. compute variance
+        if self.variance_type == 'learned_range':
+            assert model_output.shape[1] == 2 * sample.shape[1]
+            model_output, variance_value = torch.chunk(model_output, 2, dim=1)
+        else:
+            assert model_output.shape[1] == sample.shape[1]
+            variance_value = None
+        
+        log_variance = self._get_variance(t, variance_value)
+        
+        # 3. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
         if predict_epsilon:
             pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
         else:
             pred_original_sample = model_output
 
-        # 3. Clip "predicted x_0"
-        if self.config.clip_sample:
+        if self.clip_sample:
             pred_original_sample = self.clip(pred_original_sample, -1, 1)
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
@@ -152,12 +161,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
 
         # 6. Add noise
-        variance = 0
-        if t > 0:
-            noise = self.randn_like(model_output, generator=generator)
-            variance = (self._get_variance(t) ** 0.5) * noise
+        noise = self.randn_like(model_output, generator=generator) if t > 0 else self.zeros_like(model_output)
 
-        pred_prev_sample = pred_prev_sample + variance
+        pred_prev_sample = pred_prev_sample + self.exp(0.5 * log_variance) * noise
 
         return {"prev_sample": pred_prev_sample}
 
@@ -171,4 +177,4 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         return noisy_samples
 
     def __len__(self):
-        return self.config.num_train_timesteps
+        return self.num_train_timesteps
