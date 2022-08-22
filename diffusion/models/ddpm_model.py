@@ -295,21 +295,21 @@ class Model(nn.Module):
             block_in, out_ch, kernel_size=3, stride=1, padding=1
         )
 
-    def forward(self, x, t):
+    def forward(self, x, timesteps):
         # x: (b, c, h, w), t: (b,)
         # NOTE: below line constricts the model from using different resolution
         assert x.shape[2] == x.shape[3] == self.resolution
 
         # in compatiable with diffuser ddpm_pipeline
-        if not torch.is_tensor(t):
-            t = torch.tensor([t], dtype=torch.long, device=x.device)
-        elif torch.is_tensor(t) and len(t.shape) == 0:
-            t = t[None].to(x.device)
-        if t.shape[0] == 1:
+        if not torch.is_tensor(timesteps):
+            timesteps = torch.tensor([timesteps], dtype=torch.long, device=x.device)
+        elif torch.is_tensor(timesteps) and len(timesteps.shape) == 0:
+            timesteps = timesteps[None].to(x.device)
+        if timesteps.shape[0] == 1:
             timesteps = timesteps.repeat(x.shape[0])
         
         # timestep embedding
-        temb = get_timestep_embedding(t, self.ch) # (b, ch)
+        temb = get_timestep_embedding(timesteps, self.ch) # (b, ch)
         temb = self.temb.dense[0](temb)
         temb = nonlinearity(temb)
         temb = self.temb.dense[1](temb) # (b, 4 * ch)
