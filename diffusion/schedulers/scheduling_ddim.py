@@ -21,8 +21,7 @@ from typing import Union
 import numpy as np
 import torch
 
-from diffusers.configuration_utils import ConfigMixin, register_to_config
-from diffusers.schedulers.scheduling_utils import SchedulerMixin
+from .scheduling_utils import SchedulerMixin
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
@@ -48,8 +47,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     return np.array(betas, dtype=np.float32)
 
 
-class DDIMScheduler(SchedulerMixin, ConfigMixin):
-    @register_to_config
+class DDIMScheduler(SchedulerMixin):
     def __init__(
         self,
         num_train_timesteps=1000,
@@ -57,17 +55,19 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         beta_end=0.02,
         beta_schedule="linear",
         trained_betas=None,
-        timestep_values=None,
+        variance_type="fixed_small",
         clip_sample=True,
         tensor_format="pt",
     ):
+        self.num_train_timesteps = num_train_timesteps
+        self.variance_type = variance_type
+        self.clip_sample = clip_sample
 
-        if beta_schedule == "linear":
+        if trained_betas is not None:
+            self.betas = np.asarray(trained_betas)
+        elif beta_schedule == "linear":
             self.betas = np.linspace(beta_start, beta_end, num_train_timesteps, dtype=np.float32)
-        elif beta_schedule == "scaled_linear":
-            # this schedule is very specific to the latent diffusion model.
-            self.betas = np.linspace(beta_start**0.5, beta_end**0.5, num_train_timesteps, dtype=np.float32) ** 2
-        elif beta_schedule == "squaredcos_cap_v2":
+        elif beta_schedule == "cosine":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
@@ -84,6 +84,13 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         self.tensor_format = tensor_format
         self.set_format(tensor_format=tensor_format)
 
+    def set_timesteps(self, num_inference_steps):
+        self.num_inference_steps = num_inference_steps
+        self.timesteps = np.arange(
+            0, self.num_train_timesteps, self.num_train_timesteps // self.num_inference_steps
+        )[::-1].copy()
+        self.set_format(tensor_format=self.tensor_format)
+
     def _get_variance(self, timestep, prev_timestep):
         alpha_prod_t = self.alphas_cumprod[timestep]
         alpha_prod_t_prev = self.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else self.one
@@ -93,13 +100,6 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         variance = (beta_prod_t_prev / beta_prod_t) * (1 - alpha_prod_t / alpha_prod_t_prev)
 
         return variance
-
-    def set_timesteps(self, num_inference_steps):
-        self.num_inference_steps = num_inference_steps
-        self.timesteps = np.arange(
-            0, self.config.num_train_timesteps, self.config.num_train_timesteps // self.num_inference_steps
-        )[::-1].copy()
-        self.set_format(tensor_format=self.tensor_format)
 
     def step(
         self,
@@ -122,19 +122,24 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         # - pred_prev_sample -> "x_t-1"
 
         # 1. get previous step value (=t-1)
-        prev_timestep = timestep - self.config.num_train_timesteps // self.num_inference_steps
+        prev_timestep = timestep - self.num_train_timesteps // self.num_inference_steps
 
         # 2. compute alphas, betas
         alpha_prod_t = self.alphas_cumprod[timestep]
         alpha_prod_t_prev = self.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
 
-        # 3. compute predicted original sample from predicted noise also called
+        # 3. check variance_type
+        if self.variance_type == 'learned_range':
+            assert model_output.shape[1] == 2 * sample.shape[1], f"model_output.shape: {model_output.shape}"
+            model_output, _ = torch.chunk(model_output, 2, dim=1)
+        else:
+            assert model_output.shape[1] == sample.shape[1]
+
+        # 4. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
         pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
-
-        # 4. Clip "predicted x_0"
-        if self.config.clip_sample:
+        if self.clip_sample:
             pred_original_sample = self.clip(pred_original_sample, -1, 1)
 
         # 5. compute variance: "sigma_t(η)" -> see formula (16)
@@ -155,7 +160,7 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         if eta > 0:
             device = model_output.device if torch.is_tensor(model_output) else "cpu"
             noise = torch.randn(model_output.shape, generator=generator).to(device)
-            variance = self._get_variance(timestep, prev_timestep) ** (0.5) * eta * noise
+            variance = variance ** (0.5) * eta * noise
 
             if not torch.is_tensor(model_output):
                 variance = variance.numpy()
@@ -174,4 +179,4 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         return noisy_samples
 
     def __len__(self):
-        return self.config.num_train_timesteps
+        return self.num_train_timesteps

@@ -29,8 +29,18 @@ class DDIMPipeline(DiffusionPipeline):
 
     @torch.no_grad()
     def __call__(
-        self, batch_size=1, generator=None, torch_device=None, eta=0.0, num_inference_steps=50, output_type="pil"
+        self, 
+        batch_size=1, 
+        model_kwargs=None,
+        generator=None, 
+        torch_device=None, 
+        eta=0.0, 
+        num_inference_steps=50, 
+        output_type="pil",
     ):
+        if model_kwargs is None:
+            model_kwargs = {}
+        
         # eta corresponds to η in paper and should be between [0, 1]
         if torch_device is None:
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,7 +59,7 @@ class DDIMPipeline(DiffusionPipeline):
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t)["sample"]
+            model_output = self.unet(image, t, **model_kwargs)["sample"]
 
             # 2. predict previous mean of image x_t-1 and add variance depending on eta
             # do x_t -> x_t-1

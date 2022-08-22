@@ -66,7 +66,7 @@ class DDPMScheduler(SchedulerMixin):
             self.betas = np.asarray(trained_betas)
         elif beta_schedule == "linear":
             self.betas = np.linspace(beta_start, beta_end, num_train_timesteps, dtype=np.float32)
-        elif beta_schedule == "squaredcos_cap_v2":
+        elif beta_schedule == "cosine":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
