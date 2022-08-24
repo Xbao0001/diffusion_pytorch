@@ -60,7 +60,7 @@ class AllWeatherDataset(Dataset):
         input_img = Image.open(input_path).convert("RGB")
         gt_img = Image.open(gt_path).convert("RGB")
 
-        if self.parse_patches:
+        if self.parse_patches: # for train
             i, j, h, w = self.get_params(input_img, (self.patch_size, self.patch_size), self.n)
             input_patches = self.n_random_crops(input_img, i, j, h, w)
             gt_patches = self.n_random_crops(gt_img, i, j, h, w)
@@ -75,10 +75,9 @@ class AllWeatherDataset(Dataset):
             noise = torch.randn_like(gt_patches)
             
             return input_patches, gt_patches, noise, timestep, img_name
-        else:
-            # Resizing images to multiples of 16 for whole-image restoration
+        else: # for infer # resizing images to multiples of 16
             wd_new, ht_new = input_img.size
-            if ht_new > wd_new and ht_new > 1024: # NOTE: why neded this? GPU memory limitation?
+            if ht_new > wd_new and ht_new > 1024: # NOTE: why need this? GPU memory limitation?
                 wd_new = int(np.ceil(wd_new * 1024 / ht_new))
                 ht_new = 1024
             elif ht_new <= wd_new and wd_new > 1024:
