@@ -34,6 +34,6 @@ ema:
 
 data:
   name: cifar10
-  cache_dir: ./data
+  cache_dir: /nas/datasets/huggingface
   train_batch_size: 64
   eval_batch_size: 64
