@@ -3,3 +3,6 @@ pretrained/*
 **/__pycache__
 results/
 .idea
+saves
+outputs
+data
