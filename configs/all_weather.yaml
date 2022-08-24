@@ -1,23 +1,24 @@
-output_dir: saves
+
+out_dir: ./save
 logging_dir: logs
 
 train:
-  num_epochs: 1000
+  num_epochs: 500
   mixed_precision: fp16
   gradient_accumulation_steps: 1
   use_ema: true
-  save_images_epochs: 5
-  save_model_epochs: 5
+  save_images_epochs: 2
+  save_model_epochs: 2
 
 model:
-  resolution: 32
   in_channels: 3
   out_ch: 3
   ch: 128
-  ch_mult: [1, 2, 2, 2]
+  ch_mult: [1, 1, 2, 2, 4, 4]
   num_res_blocks: 2
-  attn_resolutions: [16]
-  dropout: 0.1
+  attn_resolutions: [16, ]
+  dropout: 0.0
+  resamp_with_conv: True
 
 optim:
   lr: 0.00002
@@ -35,5 +36,5 @@ ema:
 data:
   name: cifar10
   cache_dir: ./data
-  train_batch_size: 64
-  eval_batch_size: 64
+  batch_size: 64
+  eval_bs: 16
