@@ -71,16 +71,18 @@ class BaseDataset(Dataset):
             noise = torch.randn_like(gt_patches)
             
             return input_patches, gt_patches, noise, timestep, img_name
-        else: # for infer # resizing images to multiples of 16
+        else: # for infer, test one image at a time
+            # resizing images to multiples of 16
             wd_new, ht_new = input_img.size
-            if ht_new > wd_new and ht_new > 1024: # NOTE: why need this? GPU memory limitation?
-                wd_new = wd_new * 1024 // ht_new
-                ht_new = 1024
-            elif ht_new <= wd_new and wd_new > 1024:
-                ht_new = ht_new * 1024 // wd_new
-                wd_new = 1024
-            wd_new = 16 * (wd_new // 16.0)
-            ht_new = 16 * (ht_new // 16.0)
+            # NOTE: why need this? GPU memory limitation?
+            # if ht_new > wd_new and ht_new > 1024: 
+            #     wd_new = int(wd_new * 1024.0 / ht_new)
+            #     ht_new = 1024
+            # elif ht_new <= wd_new and wd_new > 1024:
+            #     ht_new = int(ht_new * 1024.0 / wd_new)
+            #     wd_new = 1024
+            wd_new = int(wd_new / 16.0) * 16
+            ht_new = int(ht_new / 16.0) * 16
             input_img = input_img.resize((wd_new, ht_new), Image.ANTIALIAS)
             gt_img = gt_img.resize((wd_new, ht_new), Image.ANTIALIAS)
             if self.transform is not None:
