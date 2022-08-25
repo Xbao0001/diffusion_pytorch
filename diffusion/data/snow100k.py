@@ -19,7 +19,7 @@ class SnowValDataset(BaseDataset):
                          parse_patches, num_timesteps)
 
         self.input_paths = sorted(glob.glob(f"{self.root}/synthetic/*"))
-        print(f'Val dataset size: {len(self.input_paths)}.')
+        print(f'Snow100k val dataset size: {len(self.input_paths)}.')
     
     def get_paths_and_name(self, idx):
         input_path = self.input_paths[idx]

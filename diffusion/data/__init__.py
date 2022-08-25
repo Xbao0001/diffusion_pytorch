@@ -1,3 +1,5 @@
+from .data_utils import get_dataloader
+
 from .all_weather import AllWeatherDataset
 from .base import BaseDataset
 from .cifar10 import CIFAR10
