@@ -36,7 +36,7 @@ class DDIMPipeline(DiffusionPipeline):
         torch_device=None, 
         eta=0.0, 
         num_inference_steps=50, 
-        output_type="pil",
+        output_type=None,
     ):
         if model_kwargs is None:
             model_kwargs = {}
@@ -65,9 +65,10 @@ class DDIMPipeline(DiffusionPipeline):
             # do x_t -> x_t-1
             image = self.scheduler.step(model_output, t, image, eta)["prev_sample"]
 
-        image = (image / 2 + 0.5).clamp(0, 1)
-        image = image.cpu().permute(0, 2, 3, 1).numpy()
+        image = (image / 2 + 0.5).clamp(0, 1).cpu()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
+        elif output_type == 'numpy':
+            image = image.numpy()
 
         return {"sample": image}

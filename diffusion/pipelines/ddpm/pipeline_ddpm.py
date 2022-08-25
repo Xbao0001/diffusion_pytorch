@@ -28,7 +28,7 @@ class DDPMPipeline(DiffusionPipeline):
         self.register_modules(unet=unet, scheduler=scheduler)
 
     @torch.no_grad()
-    def __call__(self, batch_size=1, generator=None, torch_device=None, output_type="pil"):
+    def __call__(self, batch_size=1, generator=None, torch_device=None, output_type=None):
         if torch_device is None:
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -51,9 +51,10 @@ class DDPMPipeline(DiffusionPipeline):
             # 2. compute previous image: x_t -> t_t-1
             image = self.scheduler.step(model_output, t, image)["prev_sample"]
 
-        image = (image / 2 + 0.5).clamp(0, 1)
-        image = image.cpu().permute(0, 2, 3, 1).numpy()
+        image = (image / 2 + 0.5).clamp(0, 1).cpu()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
+        elif output_type == 'numpy':
+            image = image.numpy()
 
         return {"sample": image}
