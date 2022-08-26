@@ -1,8 +1,15 @@
-output_dir: saves
-logging_dir: logs
+project: diffusion_uncond
+name: default
+exp_dir: saves
+save_dir: checkpoints
+save_freq: 5
+seed: 42
+
+wandb: false
+
 
 train:
-  num_epochs: 1000
+  num_epochs: 100
   mixed_precision: fp16
   gradient_accumulation_steps: 1
   use_ema: true
@@ -35,5 +42,5 @@ ema:
 data:
   name: cifar10
   cache_dir: /nas/datasets/huggingface
-  train_batch_size: 64
+  train_batch_size: 128
   eval_batch_size: 64
