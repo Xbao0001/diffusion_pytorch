@@ -106,6 +106,7 @@ def main(cfg, accelerator: Accelerator):
                 if accelerator.sync_gradients:
                     accelerator.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
+                lr = lr_scheduler.get_last_lr()[0]
                 if accelerator.sync_gradients:
                     lr_scheduler.step()
                 if cfg.train.use_ema:
@@ -115,7 +116,7 @@ def main(cfg, accelerator: Accelerator):
             progress_bar.update(1)
             logs = {
                 "loss": loss.detach().item(),
-                "lr": lr_scheduler.get_last_lr()[0],
+                "lr": lr,
                 "step": global_step
             }
             if cfg.train.use_ema:
@@ -135,8 +136,8 @@ def main(cfg, accelerator: Accelerator):
             if epoch % cfg.train.save_images_epochs == 0 or epoch == cfg.train.num_epochs - 1:
                 # TODO: use ddim
                 pipeline = DDPMPipeline(
-                    unet=accelerator.unwrap_model(
-                        ema_model.averaged_model if cfg.train.use_ema else model),
+                    unet=accelerator.unwrap_model(ema_model.averaged_model 
+                                                  if cfg.train.use_ema else model),
                     scheduler=noise_scheduler,
                 )
                 
