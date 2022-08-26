@@ -28,25 +28,22 @@ class DDPMPipeline(DiffusionPipeline):
         self.register_modules(unet=unet, scheduler=scheduler)
 
     @torch.no_grad()
-    def __call__(self, batch_size=1, generator=None, torch_device=None, output_type=None):
+    def __call__(self, shape, cond=None, generator=None, torch_device=None, output_type=None):
         if torch_device is None:
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.unet.to(torch_device)
 
         # Sample gaussian noise to begin loop
-        image = torch.randn(
-            (batch_size, self.unet.in_channels, self.unet.sample_size, self.unet.sample_size),
-            generator=generator,
-        )
-        image = image.to(torch_device)
+        image = torch.randn(shape, generator=generator).to(torch_device)
+        if cond is not None: cond = cond.to(torch_device)
 
         # set step values
         self.scheduler.set_timesteps(1000)
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t)["sample"]
+            model_output = self.predict(image, cond, t)["sample"]
 
             # 2. compute previous image: x_t -> t_t-1
             image = self.scheduler.step(model_output, t, image)["prev_sample"]
@@ -58,3 +55,9 @@ class DDPMPipeline(DiffusionPipeline):
             image = image.numpy()
 
         return {"sample": image}
+
+    def predict(self, image, cond, t):
+        if cond is not None:
+            image = torch.cat([image, cond], dim=1)
+        return self.unet(image, t)
+        

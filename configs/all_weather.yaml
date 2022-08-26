@@ -1,17 +1,22 @@
-
-out_dir: ./save
-logging_dir: logs
+project: weather
+name: default
+exp_dir: ./saves
+save_dir: checkpoints
+seed: 42
+# save_freq: 5
+wandb: false
 
 train:
   num_epochs: 500
-  mixed_precision: fp16
+  mixed_precision: 'fp16'
   gradient_accumulation_steps: 1
   use_ema: true
-  save_images_epochs: 2
-  save_model_epochs: 2
+  save_images_epochs: 5
+  save_model_epochs: 5
 
 model:
-  in_channels: 3
+  resolution: 64
+  in_channels: 6
   out_ch: 3
   ch: 128
   ch_mult: [1, 1, 2, 2, 4, 4]
@@ -21,10 +26,9 @@ model:
   resamp_with_conv: True
 
 optim:
-  lr: 0.00002
+  lr: 0.0001
   weight_decay: 0.0
   eps: 0.00000001
-
   lr_scheduler: cosine
   lr_warmup_steps: 500
 
@@ -34,7 +38,12 @@ ema:
   ema_max_decay: 0.9999
 
 data:
-  name: cifar10
-  cache_dir: ./data
-  batch_size: 64
-  eval_bs: 16
+  train_root: /nas/datasets/weather/all_weather
+  raindrop_val_root: /nas/datasets/weather/raindrop/test_a
+  snow_val_root: /nas/datasets/weather/snow100k/test/Snow100K-L
+  patch_size: 64
+  n: 16
+  num_timesteps: 1000
+  batch_size: 4 ###
+  num_workers: 8
+  parse_patches: true

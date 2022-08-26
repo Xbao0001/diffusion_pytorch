@@ -67,7 +67,7 @@ class BaseDataset(Dataset):
             else: 
                 raise ValueError("plz specify transform")
 
-            timestep = random.randint(0, self.num_timesteps)
+            timestep = random.randint(0, self.num_timesteps - 1)
             noise = torch.randn_like(gt_patches)
             
             return input_patches, gt_patches, noise, timestep, img_name
