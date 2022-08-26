@@ -1,5 +1,7 @@
+from typing import Dict, Tuple
+
 import torchvision.transforms as tf
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from .all_weather import AllWeatherDataset
 from .raindrop import RaindropValDataset
@@ -16,7 +18,7 @@ def get_dataloader(
     batch_size: int = 4,
     num_workers: int = 4,
     parse_patches: bool = True,
-):
+) -> Tuple[DataLoader, Dict[str, Dataset]]:
 
     transform=tf.ToTensor()
 
