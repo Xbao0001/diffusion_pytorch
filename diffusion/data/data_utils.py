@@ -5,13 +5,13 @@ from torch.utils.data import DataLoader, Dataset
 
 from .all_weather import AllWeatherDataset
 from .raindrop import RaindropValDataset
-from .snow100k import SnowValDataset
+from .snow100k import Snow100K
 
 
-def get_dataloader(
+def get_all_weather_dataloader(
     train_root = '/nas/datasets/weather/all_weather', 
     raindrop_val_root = '/nas/datasets/weather/raindrop/test_a', 
-    snow_val_root = '/nas/datasets/weather/snow100k/test/Snow100K-L',
+    snow_val_root = '/nas/datasets/weather/snow100k',
     patch_size: int = 64, 
     n: int = 16, 
     num_timesteps: int = 1000, 
@@ -39,13 +39,14 @@ def get_dataloader(
         parse_patches=parse_patches,
         num_timesteps=num_timesteps,
     )
-    snow_val_dataset = SnowValDataset( 
+    snow_val_dataset = Snow100K( 
         root=snow_val_root,
         patch_size=patch_size,
         n=n,
         transform=transform,
         parse_patches=parse_patches,
         num_timesteps=num_timesteps,
+        mode='L',
     )
     
     train_loader = DataLoader(
