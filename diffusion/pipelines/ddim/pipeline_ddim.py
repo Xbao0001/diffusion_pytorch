@@ -56,7 +56,7 @@ class DDIMPipeline(DiffusionPipeline):
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t)['sample']
+            model_output = self.predict(image, cond, t)
 
             # 2. predict previous mean of image x_t-1 and add variance depending on eta
             # do x_t -> x_t-1
@@ -69,3 +69,9 @@ class DDIMPipeline(DiffusionPipeline):
             image = image.numpy()
 
         return {"sample": image}
+
+    def predict(self, img, cond, t):
+        if cond is not None:
+            input = torch.cat([img, cond], dim=1)
+        return self.unet(input, t)['sample']
+        

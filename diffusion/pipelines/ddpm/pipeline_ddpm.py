@@ -38,14 +38,13 @@ class DDPMPipeline(DiffusionPipeline):
         image = torch.randn(shape, generator=generator).to(torch_device)
         if cond is not None: 
             cond = cond.to(torch_device)
-            image = torch.cat([image, cond], dim=1)
 
         # set step values
         self.scheduler.set_timesteps(1000)
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t)['sample']
+            model_output = self.predict(image, cond, t)
 
             # 2. compute previous image: x_t -> t_t-1
             image = self.scheduler.step(model_output, t, image)["prev_sample"]
@@ -58,8 +57,8 @@ class DDPMPipeline(DiffusionPipeline):
 
         return {"sample": image}
 
-    def predict(self, image, cond, t):
+    def predict(self, img, cond, t):
         if cond is not None:
-            image = torch.cat([image, cond], dim=1)
-        return self.unet(image, t)
+            input = torch.cat([img, cond], dim=1)
+        return self.unet(input, t)['sample']
         
