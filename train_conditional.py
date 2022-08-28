@@ -14,13 +14,14 @@ from omegaconf import OmegaConf
 from torchvision.utils import make_grid
 from tqdm.auto import tqdm
 
-from diffusion.data import get_dataloader
+from diffusion import utils
+from diffusion.data import get_snow100k
 from diffusion.models.ddpm_model import Model
 from diffusion.pipelines import DDPMPipeline
 from diffusion.schedulers import DDPMScheduler
 
 
-@hydra.main(version_base=None, config_path='configs', config_name='all_weather.yaml')
+@hydra.main(version_base=None, config_path='configs', config_name='snow100k.yaml')
 def init_and_run(cfg):
     # save everything for this exp, except hydra
     cfg.exp_dir = os.path.join(cfg.exp_dir, cfg.name)
@@ -55,7 +56,7 @@ def init_and_run(cfg):
 
 def main(cfg, accelerator: Accelerator):
     ############################################################################
-    train_dataloader, val_data_dict = get_dataloader(**cfg.data)
+    train_dataloader, val_dataset = get_snow100k(**cfg.data)
 
     model = Model(**cfg.model)
     noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
@@ -64,16 +65,19 @@ def main(cfg, accelerator: Accelerator):
                                  weight_decay=cfg.optim.weight_decay,
                                  eps=cfg.optim.eps,)
 
-    lr_scheduler = get_scheduler(
-        cfg.optim.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=cfg.optim.lr_warmup_steps,
-        num_training_steps=(len(train_dataloader) * cfg.train.num_epochs
-                            ) // cfg.train.gradient_accumulation_steps,
-    )
+    # lr_scheduler = get_scheduler(
+    #     cfg.optim.lr_scheduler,
+    #     optimizer=optimizer,
+    #     num_warmup_steps=cfg.optim.lr_warmup_steps,
+    #     num_training_steps=(len(train_dataloader) * cfg.train.num_epochs
+    #                         ) // cfg.train.gradient_accumulation_steps,
+    # )
 
-    model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        model, optimizer, train_dataloader, lr_scheduler
+    # model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+    #     model, optimizer, train_dataloader, lr_scheduler
+    # )
+    model, optimizer, train_dataloader = accelerator.prepare(
+        model, optimizer, train_dataloader
     )
 
     ema_model = EMAModel(model, inv_gamma=cfg.ema.ema_inv_gamma,
@@ -88,14 +92,15 @@ def main(cfg, accelerator: Accelerator):
                             disable=not accelerator.is_local_main_process)
         progress_bar.set_description(f"Epoch {epoch}")
 
-        for _, (img, gt, noise, t, _) in enumerate(train_dataloader):
+        for step, (img, gt, noise, t, _) in enumerate(train_dataloader):
             img = torch.flatten(img, end_dim=1)
             gt = torch.flatten(gt, end_dim=1)
             noise = torch.flatten(noise, end_dim=1)
             t = t.reshape(-1, 1).repeat(1, cfg.data.n).flatten()
 
+            gt = utils.normalize_to_neg_one_to_one(gt)
             noisy_images = noise_scheduler.add_noise(gt, noise, t)
-
+            
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 input = torch.cat([noisy_images, img], dim=1)
@@ -106,9 +111,9 @@ def main(cfg, accelerator: Accelerator):
                 if accelerator.sync_gradients:
                     accelerator.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
-                lr = lr_scheduler.get_last_lr()[0]
-                if accelerator.sync_gradients:
-                    lr_scheduler.step()
+                # lr = lr_scheduler.get_last_lr()[0]
+                # if accelerator.sync_gradients:
+                #     lr_scheduler.step()
                 if cfg.train.use_ema:
                     ema_model.step(model)
                 optimizer.zero_grad()
@@ -116,14 +121,16 @@ def main(cfg, accelerator: Accelerator):
             progress_bar.update(1)
             logs = {
                 "loss": loss.detach().item(),
-                "lr": lr,
-                "step": global_step
+                # "lr": lr,
+                "step": global_step,
+                "epoch": epoch,
             }
             if cfg.train.use_ema:
                 logs["ema_decay"] = ema_model.decay
             
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
+            
             global_step += 1
         progress_bar.close()
 
@@ -141,17 +148,7 @@ def main(cfg, accelerator: Accelerator):
                     scheduler=noise_scheduler,
                 )
                 
-                raindrop_val_dataset, snow_val_dataset = val_data_dict.values()
-                
-                input_raindrop, gt_raindrop, *_ = raindrop_val_dataset[0]
-                output_raindrop = pipeline(
-                    shape=(cfg.data.n, 3, cfg.data.patch_size, cfg.data.patch_size),
-                    cond=input_raindrop,
-                    generator=torch.manual_seed(0),
-                )["sample"]
-
-                idx = random.randint(0, len(snow_val_dataset))
-                input_snow, gt_snow, *_ = snow_val_dataset[idx]
+                input_snow, gt_snow, *_ = random.choice(val_dataset)
                 output_snow = pipeline(
                     shape=(cfg.data.n, 3, cfg.data.patch_size, cfg.data.patch_size),
                     cond=input_snow,
@@ -160,19 +157,17 @@ def main(cfg, accelerator: Accelerator):
 
                 # denormalize the images and save to tracker
                 if cfg.wandb:
+                    prepare = lambda img: wandb.Image(make_grid(img, 4))
                     accelerator.log({
-                        'de_raindrop': wandb.Image(make_grid(output_raindrop, 4)),
-                        'gt_raindrop': wandb.Image(make_grid(gt_raindrop, 4)),
-                        'raindrop': wandb.Image(make_grid(input_raindrop, 4)),
-                        'de_snow': wandb.Image(make_grid(output_snow, 4)),
-                        'gt_snow': wandb.Image(make_grid(gt_snow, 4)),
-                        'snow': wandb.Image(make_grid(input_snow, 4)),
+                        'de_snow': prepare(output_snow), 
+                        'gt_snow': prepare(gt_snow), 
+                        'snow': prepare(input_snow) 
                     })
                 else:
-                    images_processed = (output_raindrop.numpy() * 255).round().astype("uint8")
-                    accelerator.trackers[0].writer.add_images("de_raindrop", images_processed, epoch)
-                    images_processed = (output_snow.numpy() * 255).round().astype("uint8")
-                    accelerator.trackers[0].writer.add_images("de_snow", images_processed, epoch)
+                    prepare = lambda img: (img.numpy() * 255).round().astype('uint8')
+                    accelerator.trackers[0].writer.add_images("de_snow", prepare(output_snow), epoch)
+                    accelerator.trackers[0].writer.add_images("gt_snow", prepare(gt_snow), epoch)
+                    accelerator.trackers[0].writer.add_images("snow", prepare(input_snow), epoch)
 
             if epoch % cfg.train.save_model_epochs == 0 or epoch == cfg.train.num_epochs - 1:
                  accelerator.save(pipeline.unet.state_dict(), 

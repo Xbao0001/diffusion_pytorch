@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm.auto import tqdm
 
+from diffusion import utils
 from diffusion.models.ddpm_model import Model
 from diffusion.pipelines import DDPMPipeline
 from diffusion.schedulers import DDPMScheduler
@@ -79,8 +80,9 @@ def main(cfg, accelerator: Accelerator):
     noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.optim.lr, 
-                                 weight_decay=cfg.optim.weight_decay, 
-                                 eps=cfg.optim.eps,)
+                                 weight_decay=1e-6, 
+                                 betas=(0.95, 0.999),
+                                 eps=1e-8)
 
     lr_scheduler = get_scheduler(
         cfg.optim.lr_scheduler,
@@ -106,6 +108,7 @@ def main(cfg, accelerator: Accelerator):
         progress_bar.set_description(f"Epoch {epoch}")
         for _, batch in enumerate(train_dataloader):
             clean_images = batch["input"]
+            clean_images = utils.normalize_to_neg_one_to_one(clean_images)
             # Sample noise that we'll add to the images
             noise = torch.randn(clean_images.shape).to(clean_images.device)
             bsz = clean_images.shape[0]
