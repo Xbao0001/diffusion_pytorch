@@ -56,7 +56,7 @@ class DDIMPipeline(DiffusionPipeline):
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image)['sample']
+            model_output = self.unet(image, t)['sample']
 
             # 2. predict previous mean of image x_t-1 and add variance depending on eta
             # do x_t -> x_t-1

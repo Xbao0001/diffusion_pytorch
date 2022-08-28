@@ -45,7 +45,7 @@ class DDPMPipeline(DiffusionPipeline):
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image)['sample']
+            model_output = self.unet(image, t)['sample']
 
             # 2. compute previous image: x_t -> t_t-1
             image = self.scheduler.step(model_output, t, image)["prev_sample"]
