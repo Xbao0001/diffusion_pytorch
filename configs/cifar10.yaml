@@ -2,19 +2,19 @@ project: diffusion_uncond
 name: default
 exp_dir: saves
 save_dir: checkpoints
-save_freq: 5
+save_freq: 10
 seed: 42
 
 wandb: false
 
 
 train:
-  num_epochs: 100
+  num_epochs: 1000
   mixed_precision: fp16
   gradient_accumulation_steps: 1
   use_ema: true
-  save_images_epochs: 5
-  save_model_epochs: 5
+  save_images_epochs: 10
+  save_model_epochs: 10
 
 model:
   resolution: 32
@@ -27,7 +27,7 @@ model:
   dropout: 0.1
 
 optim:
-  lr: 0.00002
+  lr: 0.0001
   weight_decay: 0.0
   eps: 0.00000001
 
