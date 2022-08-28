@@ -1,4 +1,4 @@
-from .data_utils import get_dataloader
+from .data_utils import get_snow100k
 
 from .all_weather import AllWeatherDataset
 from .base import BaseDataset
