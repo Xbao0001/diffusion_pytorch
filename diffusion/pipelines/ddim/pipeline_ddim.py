@@ -64,7 +64,7 @@ class DDIMPipeline(DiffusionPipeline):
 
         image = (image / 2 + 0.5).clamp(0, 1).cpu()
         if output_type == "pil":
-            image = self.numpy_to_pil(image)
+            image = self.numpy_to_pil(image.permute(0, 2, 3, 1).numpy())
         elif output_type == 'numpy':
             image = image.numpy()
 
@@ -72,6 +72,6 @@ class DDIMPipeline(DiffusionPipeline):
 
     def predict(self, img, cond, t):
         if cond is not None:
-            input = torch.cat([img, cond], dim=1)
-        return self.unet(input, t)['sample']
+            img = torch.cat([img, cond], dim=1)
+        return self.unet(img , t)['sample']
         
