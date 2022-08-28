@@ -36,14 +36,16 @@ class DDPMPipeline(DiffusionPipeline):
 
         # Sample gaussian noise to begin loop
         image = torch.randn(shape, generator=generator).to(torch_device)
-        if cond is not None: cond = cond.to(torch_device)
+        if cond is not None: 
+            cond = cond.to(torch_device)
+            image = torch.cat([image, cond], dim=1)
 
         # set step values
         self.scheduler.set_timesteps(1000)
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.predict(image, cond, t)["sample"]
+            model_output = self.unet(image)['sample']
 
             # 2. compute previous image: x_t -> t_t-1
             image = self.scheduler.step(model_output, t, image)["prev_sample"]

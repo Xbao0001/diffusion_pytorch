@@ -30,16 +30,14 @@ class DDIMPipeline(DiffusionPipeline):
     @torch.no_grad()
     def __call__(
         self, 
-        batch_size=1, 
-        model_kwargs=None,
+        shape,
+        cond=None,
         generator=None, 
         torch_device=None, 
         eta=0.0, 
         num_inference_steps=50, 
         output_type=None,
     ):
-        if model_kwargs is None:
-            model_kwargs = {}
         
         # eta corresponds to η in paper and should be between [0, 1]
         if torch_device is None:
@@ -48,18 +46,17 @@ class DDIMPipeline(DiffusionPipeline):
         self.unet.to(torch_device)
 
         # Sample gaussian noise to begin loop
-        image = torch.randn(
-            (batch_size, self.unet.in_channels, self.unet.sample_size, self.unet.sample_size),
-            generator=generator,
-        )
-        image = image.to(torch_device)
+        image = torch.randn(shape, generator=generator).to(torch_device)
+        if cond is not None: 
+            cond = cond.to(torch_device)
+            image = torch.cat([image, cond], dim=1)
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t, **model_kwargs)["sample"]
+            model_output = self.unet(image)['sample']
 
             # 2. predict previous mean of image x_t-1 and add variance depending on eta
             # do x_t -> x_t-1
