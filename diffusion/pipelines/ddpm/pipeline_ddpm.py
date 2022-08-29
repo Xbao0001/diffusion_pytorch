@@ -15,10 +15,8 @@
 
 
 import torch
-
-from tqdm.auto import tqdm
-
 from diffusers.pipeline_utils import DiffusionPipeline
+from tqdm.auto import tqdm
 
 
 class DDPMPipeline(DiffusionPipeline):
