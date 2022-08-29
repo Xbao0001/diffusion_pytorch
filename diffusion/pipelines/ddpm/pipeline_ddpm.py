@@ -16,7 +16,7 @@
 
 import torch
 from diffusers.pipeline_utils import DiffusionPipeline
-from tqdm.rich import tqdm
+from tqdm.auto import tqdm
 
 
 class DDPMPipeline(DiffusionPipeline):
@@ -39,6 +39,10 @@ class DDPMPipeline(DiffusionPipeline):
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.unet.to(torch_device)
+
+        for k, v in kwargs.items(): 
+            if isinstance(v, torch.Tensor):
+                kwargs[k] = v.to(torch_device)
 
         # Sample gaussian noise to begin loop
         image = torch.randn(shape, generator=generator).to(torch_device)
