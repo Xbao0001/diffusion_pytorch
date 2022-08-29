@@ -16,7 +16,7 @@
 
 import torch
 from diffusers.pipeline_utils import DiffusionPipeline
-from tqdm.auto import tqdm
+from tqdm.rich import tqdm
 
 
 class DDPMPipeline(DiffusionPipeline):
@@ -26,7 +26,15 @@ class DDPMPipeline(DiffusionPipeline):
         self.register_modules(unet=unet, scheduler=scheduler)
 
     @torch.no_grad()
-    def __call__(self, shape, cond=None, generator=None, torch_device=None, output_type=None):
+    def __call__(
+        self, 
+        shape, 
+        cond=None, 
+        generator=None, 
+        torch_device=None, 
+        output_type=None,
+        **kwargs,
+    ):
         if torch_device is None:
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -42,7 +50,7 @@ class DDPMPipeline(DiffusionPipeline):
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.predict(image, cond, t)
+            model_output = self.predict(image, cond, t, **kwargs)
 
             # 2. compute previous image: x_t -> t_t-1
             image = self.scheduler.step(model_output, t, image)["prev_sample"]
@@ -55,8 +63,8 @@ class DDPMPipeline(DiffusionPipeline):
 
         return {"sample": image}
 
-    def predict(self, img, cond, t):
+    def predict(self, img, cond, t, **kwargs):
         if cond is not None:
             img = torch.cat([img, cond], dim=1)
-        return self.unet(img, t)['sample']
+        return self.unet(img, t, **kwargs)['sample']
         

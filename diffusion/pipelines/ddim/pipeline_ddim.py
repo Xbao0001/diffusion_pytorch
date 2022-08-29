@@ -35,6 +35,7 @@ class DDIMPipeline(DiffusionPipeline):
         eta=0.0, 
         num_inference_steps=50, 
         output_type=None,
+        **kwargs, 
     ):
         
         # eta corresponds to η in paper and should be between [0, 1]
@@ -54,7 +55,7 @@ class DDIMPipeline(DiffusionPipeline):
 
         for t in tqdm(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.predict(image, cond, t)
+            model_output = self.predict(image, cond, t, **kwargs)
 
             # 2. predict previous mean of image x_t-1 and add variance depending on eta
             # do x_t -> x_t-1
@@ -68,8 +69,8 @@ class DDIMPipeline(DiffusionPipeline):
 
         return {"sample": image}
 
-    def predict(self, img, cond, t):
+    def predict(self, img, cond, t, **kwargs):
         if cond is not None:
             img = torch.cat([img, cond], dim=1)
-        return self.unet(img , t)['sample']
+        return self.unet(img , t, **kwargs)['sample']
         
