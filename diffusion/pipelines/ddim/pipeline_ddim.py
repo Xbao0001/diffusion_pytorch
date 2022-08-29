@@ -63,7 +63,7 @@ class DDIMPipeline(DiffusionPipeline):
 
             # 2. predict previous mean of image x_t-1 and add variance depending on eta
             # do x_t -> x_t-1
-            image = self.scheduler.step(model_output, t, image, eta)["prev_sample"]
+            image = self.scheduler.step(model_output, t, image, eta, **kwargs)["prev_sample"]
 
         image = (image / 2 + 0.5).clamp(0, 1).cpu()
         if output_type == "pil":

@@ -19,6 +19,7 @@ from typing import Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from .scheduling_utils import SchedulerMixin
 
@@ -57,10 +58,14 @@ class DDPMScheduler(SchedulerMixin):
         variance_type="fixed_small",
         clip_sample=True,
         tensor_format="pt",
+        classifier=None,
+        classifier_scale=1.0,
     ):
         self.num_train_timesteps = num_train_timesteps
         self.variance_type = variance_type
         self.clip_sample = clip_sample
+        self.classifier = classifier
+        self.classifier_scale = classifier_scale
 
         if trained_betas is not None:
             self.betas = np.asarray(trained_betas)
@@ -123,6 +128,7 @@ class DDPMScheduler(SchedulerMixin):
         sample: Union[torch.FloatTensor, np.ndarray],
         predict_epsilon=True,
         generator=None,
+        **kwargs,
     ):
         t = timestep
         # 1. compute alphas, betas
@@ -160,9 +166,13 @@ class DDPMScheduler(SchedulerMixin):
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
         pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
 
-        # 6. Add noise
+        # 6.add guided grad
+        if self.classifier is not None:
+            grad = self.cond_fn(sample, t, **kwargs)
+            pred_prev_sample += torch.exp(log_variance) * grad
+    
+        # 7. Add noise
         noise = self.randn_like(model_output, generator=generator) if t > 0 else self.zeros_like(model_output)
-
         pred_prev_sample = pred_prev_sample + self.exp(0.5 * log_variance) * noise
 
         return {"prev_sample": pred_prev_sample}
@@ -178,3 +188,14 @@ class DDPMScheduler(SchedulerMixin):
 
     def __len__(self):
         return self.num_train_timesteps
+
+    def cond_fn(self, x: torch.Tensor, t, y=None):
+        assert y is not None
+        self.classifier = self.classifier.to(x.device)
+        with torch.enable_grad():
+            x_in = x.detach().requires_grad_(True)
+            logits = self.classifier(x_in, t)
+            log_probs = F.log_softmax(logits, dim=-1)
+            selected = log_probs[range(len(logits)), y.view(-1)]
+            grad = torch.autograd.grad(selected.sum(), x_in)[0] 
+        return grad * self.classifier_scale

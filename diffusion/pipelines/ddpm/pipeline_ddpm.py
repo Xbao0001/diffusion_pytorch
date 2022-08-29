@@ -57,7 +57,7 @@ class DDPMPipeline(DiffusionPipeline):
             model_output = self.predict(image, cond, t, **kwargs)
 
             # 2. compute previous image: x_t -> t_t-1
-            image = self.scheduler.step(model_output, t, image)["prev_sample"]
+            image = self.scheduler.step(model_output, t, image, **kwargs)["prev_sample"]
 
         image = (image / 2 + 0.5).clamp(0, 1).cpu()
         if output_type == "pil":
