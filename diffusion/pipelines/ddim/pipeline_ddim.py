@@ -16,7 +16,7 @@
 
 import torch
 from diffusers.pipeline_utils import DiffusionPipeline
-from tqdm.auto import tqdm
+from tqdm.rich import tqdm
 
 
 class DDIMPipeline(DiffusionPipeline):
