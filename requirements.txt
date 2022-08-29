@@ -6,7 +6,10 @@ hydra-core==1.2.0
 numpy==1.22.4
 omegaconf==2.2.2
 Pillow==9.2.0
-torch==1.11.0
-torchvision==0.12.0
+torch
+torchvision
 tqdm==4.63.0
 tensorboard
+ipykernel
+matplotlib
+wandb
